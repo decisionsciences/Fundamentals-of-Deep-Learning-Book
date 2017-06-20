@@ -28,12 +28,12 @@ import tensorflow as tf
 # Process images of this size. Note that this differs from the original CIFAR
 # image size of 32 x 32. If one alters this number, then the entire model
 # architecture will change and any model would need to be retrained.
-IMAGE_SIZE = 24
+IMAGE_SIZE = 32
 
 # Global constants describing the CIFAR-10 data set.
 NUM_CLASSES = 10
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 50000
-NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 7358
+NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 2453
 
 DATA_URL = 'http://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz'
 
@@ -133,8 +133,9 @@ def distorted_inputs(data_dir, batch_size):
     images: Images. 4D tensor of [batch_size, IMAGE_SIZE, IMAGE_SIZE, 3] size.
     labels: Labels. 1D tensor of [batch_size] size.
   """
-  filenames = [os.path.join(data_dir, 'data_batch_%d.bin' % i)
-               for i in xrange(1, 6)]
+#  filenames = [os.path.join(data_dir, 'data_batch_%d.bin' % i)
+#               for i in xrange(1, 6)]
+  filenames = ['/export/ddorroh/datasets/container/batches-bin/train_batch.bin']
   for f in filenames:
     if not tf.gfile.Exists(f):
       raise ValueError('Failed to find file: ' + f)
@@ -166,7 +167,7 @@ def distorted_inputs(data_dir, batch_size):
                                              lower=0.2, upper=1.8)
 
   # Subtract off the mean and divide by the variance of the pixels.
-  float_image = tf.image.per_image_whitening(distorted_image)
+  float_image = tf.image.per_image_standardization(distorted_image)
 
   # Ensure that the random shuffling has good mixing properties.
   min_fraction_of_examples_in_queue = 0.4
@@ -180,7 +181,7 @@ def distorted_inputs(data_dir, batch_size):
   images, labels = _generate_image_and_label_batch(float_image, read_input.label,
                                                    min_queue_examples, batch_size)
 
-  tf.image_summary('distorted_images', images)
+  tf.summary.image('distorted_images', images)
 
   return images, labels
 
@@ -196,11 +197,13 @@ def inputs(eval_data, data_dir, batch_size):
     labels: Labels. 1D tensor of [batch_size] size.
   """
   if not eval_data:
-    filenames = [os.path.join(data_dir, 'data_batch_%d.bin' % i)
-                 for i in xrange(1, 6)]
+#    filenames = [os.path.join(data_dir, 'data_batch_%d.bin' % i)
+#                 for i in xrange(1, 6)]
+    filenames = ['/export/ddorroh/datasets/container/batches-bin/train_batch.bin']
     num_examples_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
   else:
-    filenames = [os.path.join(data_dir, 'test_batch.bin')]
+    #filenames = [os.path.join(data_dir, 'test_batch.bin')]
+    filenames = ['/export/ddorroh/datasets/container/batches-bin/test_batch.bin']
     num_examples_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
 
   for f in filenames:
@@ -223,7 +226,7 @@ def inputs(eval_data, data_dir, batch_size):
                                                          width, height)
 
   # Subtract off the mean and divide by the variance of the pixels.
-  float_image = tf.image.per_image_whitening(resized_image)
+  float_image = tf.image.per_image_standardization(resized_image)
 
   # Ensure that the random shuffling has good mixing properties.
   min_fraction_of_examples_in_queue = 0.4
@@ -234,7 +237,7 @@ def inputs(eval_data, data_dir, batch_size):
   images, labels = _generate_image_and_label_batch(float_image, read_input.label,
                                                    min_queue_examples, batch_size)
 
-  tf.image_summary('val_images', images)
+  tf.summary.image('val_images', images)
 
   return images, labels
 
