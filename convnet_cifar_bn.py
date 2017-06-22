@@ -5,6 +5,7 @@ import tensorflow as tf
 import numpy as np
 import time, os
 from matplotlib import pyplot as plt
+import utils
 
 # Architecture
 n_hidden_1 = 256
@@ -12,11 +13,56 @@ n_hidden_2 = 256
 
 # Parameters
 learning_rate = 0.01
-training_epochs = 10
+training_epochs = 200
 batch_size = 128
 display_step = 1
 
-def plot_conv_output(conv_img, name):
+from PIL import Image
+
+def crop(image):
+
+   width  = image.size[0]
+   height = image.size[1]
+
+   aspect = width / float(height)
+
+   ideal_width = 200
+   ideal_height = 200
+
+   #ideal_aspect = ideal_width / float(ideal_height)
+   ideal_aspect = 1
+
+   if aspect > ideal_aspect:
+      # Then crop the left and right edges:
+      new_width = int(ideal_aspect * height)
+      offset = (width - new_width) / 2
+
+      if width - offset*2 == height:
+         resize = (offset, 0, width - offset, height)
+      else:
+         resize = (offset, 0, width - offset - 1, height)
+      
+   else:
+      # ... crop the top and bottom:
+      new_height = int(width / ideal_aspect)
+      offset = (height - new_height) / 2
+      if width == height - offset*2:
+         resize = (0, offset, width, height - offset)
+      else:
+         resize = (0, offset, width, height - offset -1)
+
+   return image.crop(resize)
+
+def convert_image(path):
+    image = Image.open(path)
+    image = crop(image)
+    image.thumbnail((32,32),Image.ANTIALIAS)
+    image = np.array(image).reshape(-1, 32, 32, 3)
+    return image
+
+
+
+def plot_conv_output(conv_img, plot_dir,name):
     """
     Makes plots of results of performing convolution
     :param conv_img: numpy array of rank 4
@@ -24,11 +70,9 @@ def plot_conv_output(conv_img, name):
     :return: nothing, plots are saved on the disk
     """
     # make path to output folder
-    plot_dir = os.path.join(PLOT_DIR, 'conv_output')
-    plot_dir = os.path.join(plot_dir, name)
 
     # create directory if does not exist, otherwise empty it
-    utils.prepare_dir(plot_dir, empty=True)
+    utils.prepare_dir(plot_dir, empty=False)
 
     w_min = np.min(conv_img)
     w_max = np.max(conv_img)
@@ -48,12 +92,14 @@ def plot_conv_output(conv_img, name):
         # get a single image
         img = conv_img[0, :, :,  l]
         # put it on the grid
-        ax.imshow(img, vmin=w_min, vmax=w_max, interpolation='bicubic', cmap='Greys')
+        #ax.imshow(img, vmin=w_min, vmax=w_max, interpolation='bicubic', cmap='Greys')
+        ax.imshow(img)
         # remove any labels from the axes
         ax.set_xticks([])
         ax.set_yticks([])
     # save figure
     plt.savefig(os.path.join(plot_dir, '{}.png'.format(name)), bbox_inches='tight')
+    plt.close()
 
 
 def plot_conv_weights(weights, name, channels_all=True):
@@ -65,8 +111,7 @@ def plot_conv_weights(weights, name, channels_all=True):
     :return: nothing, plots are saved on the disk
     """
     # make path to output folder
-    plot_dir = os.path.join(PLOT_DIR, 'conv_weights')
-    plot_dir = os.path.join(plot_dir, name)
+    plot_dir = os.path.join('conv_weights', name)
 
     # create directory if does not exist, otherwise empty it
     utils.prepare_dir(plot_dir, empty=True)
@@ -188,7 +233,10 @@ def conv2d(input, weight_shape, bias_shape, phase_train, visualize=False):
     return activations
 
 def max_pool(input, k=2):
-    return tf.nn.max_pool(input, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')
+    activations = tf.nn.max_pool(input, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')
+    tf.add_to_collection('maxpool_output', activations)
+    return activations
+
 
 def layer(input, weight_shape, bias_shape, phase_train):
     weight_init = tf.random_normal_initializer(stddev=(2.0/weight_shape[0])**0.5)
@@ -339,10 +387,21 @@ if __name__ == '__main__':
                 dt = np.dtype([('label',np.uint8),('image',np.uint8,1024*3)])
                 container_images = np.fromfile('/export/ddorroh/datasets/container/batches-bin/container_images.bin',dt)
                 image = container_images['image'][0].reshape(3,32,32).transpose(1,2,0).astype(np.float32).reshape(-1,32, 32, 3)
-                conv_out = sess.run([tf.get_collection('conv_output')], feed_dict={x: image, phase_train: False})
+                
+                files = map(lambda i: os.path.join('/export/ddorroh/datasets/container/cropped/',i),os.listdir('/export/ddorroh/datasets/container/cropped/'))
+                files.sort()
+                for f in files[0:100]:
+                    try:
+                        image = convert_image(f)
+                        conv_out = sess.run([tf.get_collection('conv_output')], feed_dict={x: image, phase_train: False})
 
-                for i, c in enumerate(conv_out[0]):
-                    plot_conv_output(c, 'conv{}'.format(i))
+                        for i, c in enumerate(conv_out[0]):
+                            name = '{}'.format(os.path.basename(f).split('.')[0])
+                            plot_dir = 'conv_output/conv{}'.format(i)
+                            plot_conv_output(c, plot_dir, name)
+                    except ValueError:
+                        print 'skipping {}'.format(f)
+                        
                 #conv_img = conv_out[0][0]
                 #plt.imshow(conv_img[0,:,:,2])
 
